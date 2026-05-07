@@ -153,10 +153,13 @@ export default function App() {
               referrerPolicy="no-referrer" 
             />
             <div>
-              <h1 className="text-xl font-bold tracking-tight text-slate-900">Paradox '26 <span className="text-indigo-600">Schedule</span></h1>
-              <div className="flex items-center gap-2">
-                <div className={`w-1.5 h-1.5 rounded-full ${conflictingIds.size > 0 || violationIds.size > 0 ? 'bg-red-500 animate-pulse' : 'bg-emerald-500'}`}></div>
-                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+              <h1 className="text-xl font-extrabold tracking-tight text-slate-900 flex items-center gap-2">
+                <span>Paradox '26</span>
+                <span className="text-indigo-600">Schedule</span>
+              </h1>
+              <div className="flex items-center gap-2 mt-0.5">
+                <div className={`w-2 h-2 rounded-full ${conflictingIds.size > 0 || violationIds.size > 0 ? 'bg-red-500 animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.5)]' : 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]'}`}></div>
+                <span className="text-[10px] font-extrabold uppercase tracking-[0.1em] text-slate-400">
                   {conflictingIds.size > 0 || violationIds.size > 0 ? 'Conflicts Found' : 'Schedule Optimized'}
                 </span>
               </div>
