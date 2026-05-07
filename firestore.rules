@@ -27,6 +27,10 @@ service cloud.firestore {
       return resource.data;
     }
 
+    function isAdmin() {
+      return isVerified() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
     // Phase 4: Entity Validation
     function isValidEvent(data) {
       return data.keys().hasAll(['day', 'time', 'category', 'name', 'venue', 'id', 'updatedBy', 'updatedByEmail']) &&
@@ -49,6 +53,14 @@ service cloud.firestore {
     function isValidCategory(data) {
       return data.keys().hasAll(['name']) && data.keys().size() == 1 &&
              data.name is string && data.name.size() > 0 && data.name.size() <= 100;
+    }
+
+    function isValidActivity(data) {
+      return data.keys().hasAll(['userId', 'userEmail', 'action', 'eventDetails', 'timestamp']) &&
+             data.userId == request.auth.uid &&
+             data.userEmail == request.auth.token.email &&
+             data.action in ['CREATE', 'UPDATE', 'DELETE'] &&
+             data.timestamp == request.time;
     }
 
     // Rules
@@ -80,6 +92,16 @@ service cloud.firestore {
     match /categories/{categoryId} {
       allow read: if isSignedIn();
       allow write: if isVerified() && isValidId(categoryId) && isValidCategory(incoming());
+    }
+
+    match /activity/{activityId} {
+      allow read: if isVerified();
+      allow create: if isVerified() && isValidActivity(incoming());
+    }
+
+    match /admins/{adminId} {
+      allow read: if isSignedIn();
+      allow write: if false; // Admins must be provisioned manually or via console
     }
     
     // Testing path

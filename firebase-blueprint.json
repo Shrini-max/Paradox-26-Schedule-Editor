@@ -36,6 +36,28 @@
         "name": { "type": "string" }
       },
       "required": ["name"]
+    },
+    "Activity": {
+      "title": "Activity",
+      "description": "A log entries of schedule changes",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "action": { "type": "string", "enum": ["CREATE", "UPDATE", "DELETE"] },
+        "eventDetails": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "userEmail", "action", "eventDetails", "timestamp"]
+    },
+    "Admin": {
+      "title": "Admin",
+      "description": "A user with administrative privileges",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" }
+      },
+      "required": ["email"]
     }
   },
   "firestore": {
@@ -50,6 +72,14 @@
     "categories": {
       "schema": "Category",
       "description": "Collection of event categories"
+    },
+    "activity": {
+      "schema": "Activity",
+      "description": "Historical log of schedule changes"
+    },
+    "admins": {
+      "schema": "Admin",
+      "description": "List of administrative user IDs"
     }
   }
 }

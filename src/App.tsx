@@ -22,7 +22,9 @@ import {
   Dribbble,
   Building,
   LogOut,
-  LogIn
+  LogIn,
+  History,
+  ShieldCheck
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { INITIAL_CSV_DATA, FestivalEvent } from './constants';
@@ -67,7 +69,20 @@ interface FirestoreErrorInfo {
     userId?: string | null;
     email?: string | null;
     emailVerified?: boolean | null;
+  providerInfo?: {
+      providerId?: string | null;
+      email?: string | null;
+    }[];
   }
+}
+
+interface Activity {
+  id: string;
+  userId: string;
+  userEmail: string;
+  action: 'CREATE' | 'UPDATE' | 'DELETE';
+  eventDetails: string;
+  timestamp: any;
 }
 
 function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
@@ -87,8 +102,10 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [authLoading, setAuthLoading] = useState(true);
   const [events, setEvents] = useState<FestivalEvent[]>([]);
+  const [activities, setActivities] = useState<Activity[]>([]);
   const [search, setSearch] = useState('');
   const [filterDay, setFilterDay] = useState('All');
   const [filterCategory, setFilterCategory] = useState('All');
@@ -99,6 +116,7 @@ export default function App() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isVenueManagerOpen, setIsVenueManagerOpen] = useState(false);
   const [isCategoryManagerOpen, setIsCategoryManagerOpen] = useState(false);
+  const [isActivityFeedOpen, setIsActivityFeedOpen] = useState(false);
   const [newVenueName, setNewVenueName] = useState('');
   const [newCategoryName, setNewCategoryName] = useState('');
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -114,11 +132,20 @@ export default function App() {
 
   // Sync with Firestore
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      setIsAdmin(false);
+      return;
+    }
 
     const eventsRef = collection(db, 'events');
     const venuesRef = collection(db, 'venues');
     const categoriesRef = collection(db, 'categories');
+    const activityRef = collection(db, 'activity');
+    const adminDocRef = doc(db, 'admins', user.uid);
+
+    const unsubscribeAdmin = onSnapshot(adminDocRef, (doc) => {
+      setIsAdmin(doc.exists());
+    });
 
     const unsubscribeEvents = onSnapshot(query(eventsRef), (snapshot) => {
       const fetchedEvents = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as FestivalEvent));
@@ -152,10 +179,17 @@ export default function App() {
       setCategories(fetchedCategories);
     }, err => handleFirestoreError(err, OperationType.LIST, 'categories'));
 
+    const unsubscribeActivity = onSnapshot(query(activityRef, orderBy('timestamp', 'desc')), (snapshot) => {
+      const fetchedActivities = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Activity));
+      setActivities(fetchedActivities);
+    }, err => handleFirestoreError(err, OperationType.LIST, 'activity'));
+
     return () => {
+      unsubscribeAdmin();
       unsubscribeEvents();
       unsubscribeVenues();
       unsubscribeCategories();
+      unsubscribeActivity();
     };
   }, [user]);
 
@@ -203,6 +237,22 @@ export default function App() {
   }, [events, search, filterDay, filterCategory, filterVenue, filterTimeRange]);
 
   // Handlers
+  const logActivity = async (action: 'CREATE' | 'UPDATE' | 'DELETE', event: Partial<FestivalEvent>) => {
+    if (!user) return;
+    const activityRef = collection(db, 'activity');
+    try {
+      await setDoc(doc(activityRef), {
+        userId: user.uid,
+        userEmail: user.email || 'unknown',
+        action,
+        eventDetails: `${event.name} (${event.day}, ${event.time})`,
+        timestamp: serverTimestamp()
+      });
+    } catch (err) {
+      console.warn('Failed to log activity:', err);
+    }
+  };
+
   const handleEdit = (event: FestivalEvent) => {
     setEditingId(event.id);
     setEditForm(event);
@@ -223,6 +273,9 @@ export default function App() {
         updatedAt: serverTimestamp(),
         ...(editingId === 'new' ? { createdAt: serverTimestamp() } : {})
       }, { merge: true });
+      
+      logActivity(editingId === 'new' ? 'CREATE' : 'UPDATE', editForm);
+      
       setEditingId(null);
       setEditForm({});
     } catch (err) {
@@ -232,8 +285,10 @@ export default function App() {
 
   const handleDelete = async (id: string) => {
     if (!user) return;
+    const eventToDelete = events.find(e => e.id === id);
     try {
       await deleteDoc(doc(db, 'events', id));
+      if (eventToDelete) logActivity('DELETE', eventToDelete);
       setDeleteId(null);
     } catch (err) {
       handleFirestoreError(err, OperationType.DELETE, `events/${id}`);
@@ -311,23 +366,39 @@ export default function App() {
                 <span className="text-[10px] font-extrabold uppercase tracking-[0.1em] text-slate-400">
                   {conflictingIds.size > 0 || violationIds.size > 0 ? 'Conflicts Found' : 'Schedule Optimized'}
                 </span>
+                {isAdmin && (
+                  <div className="flex items-center gap-1.5 px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-lg border border-indigo-200">
+                    <ShieldCheck size={10} />
+                    <span className="text-[9px] font-black uppercase tracking-tighter">Admin Mode</span>
+                  </div>
+                )}
               </div>
             </div>
           </div>
           
           <div className="flex items-center gap-3">
             <button 
-              onClick={() => setIsCategoryManagerOpen(true)}
-              className="hidden sm:flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-2xl text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-all hover:border-slate-300"
+              onClick={() => setIsActivityFeedOpen(true)}
+              className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-2xl text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-all hover:border-slate-300 shadow-sm"
             >
-              <Tag size={16} /> Categories
+              <History size={16} /> Activity
             </button>
-            <button 
-              onClick={() => setIsVenueManagerOpen(true)}
-              className="hidden sm:flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-2xl text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-all hover:border-slate-300"
-            >
-              <MapPin size={16} /> Venues
-            </button>
+            {isAdmin && (
+              <>
+                <button 
+                  onClick={() => setIsCategoryManagerOpen(true)}
+                  className="hidden sm:flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-2xl text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-all hover:border-slate-300"
+                >
+                  <Tag size={16} /> Categories
+                </button>
+                <button 
+                  onClick={() => setIsVenueManagerOpen(true)}
+                  className="hidden sm:flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-2xl text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-all hover:border-slate-300"
+                >
+                  <MapPin size={16} /> Venues
+                </button>
+              </>
+            )}
             <button 
               onClick={() => exportToCSV(events)}
               className="flex items-center gap-2 px-4 py-2.5 bg-indigo-50 border border-indigo-100 rounded-2xl text-sm font-semibold text-indigo-700 hover:bg-indigo-100 transition-all"
@@ -478,13 +549,15 @@ export default function App() {
                       >
                         <Edit2 size={14} />
                       </button>
-                      <button 
-                        onClick={() => setDeleteId(event.id)}
-                        className="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-50 text-slate-400 hover:text-red-500 hover:bg-white border border-transparent hover:border-slate-100 transition-all"
-                        title="Delete"
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                      {isAdmin && (
+                        <button 
+                          onClick={() => setDeleteId(event.id)}
+                          className="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-50 text-slate-400 hover:text-red-500 hover:bg-white border border-transparent hover:border-slate-100 transition-all"
+                          title="Delete"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
                     </div>
                   </motion.div>
                 );
@@ -719,6 +792,84 @@ export default function App() {
               <datalist id="venue-options">
                 {allVenues.filter(v => v !== 'All').map(v => <option key={v} value={v} />)}
               </datalist>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Activity Feed Modal */}
+      <AnimatePresence>
+        {isActivityFeedOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsActivityFeedOpen(false)}
+              className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0, x: 20 }}
+              animate={{ scale: 1, opacity: 1, x: 0 }}
+              exit={{ scale: 0.95, opacity: 0, x: 20 }}
+              className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col h-[80vh]"
+            >
+              <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600">
+                    <History size={20} />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-bold text-slate-800">Schedule Activity</h2>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Real-time update feed</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setIsActivityFeedOpen(false)}
+                  className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                {activities.map((activity) => (
+                  <div key={activity.id} className="relative pl-6 border-l-2 border-slate-100 pb-2">
+                    <div className={`absolute -left-1.5 top-0 w-3 h-3 rounded-full border-2 border-white ${
+                      activity.action === 'CREATE' ? 'bg-emerald-400' :
+                      activity.action === 'UPDATE' ? 'bg-indigo-400' : 'bg-red-400'
+                    }`} />
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                        {activity.timestamp?.seconds ? new Date(activity.timestamp.seconds * 1000).toLocaleString() : 'Just now'}
+                      </span>
+                      <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-tighter ${
+                        activity.action === 'CREATE' ? 'bg-emerald-50 text-emerald-700' :
+                        activity.action === 'UPDATE' ? 'bg-indigo-50 text-indigo-700' : 'bg-red-50 text-red-700'
+                      }`}>
+                        {activity.action}
+                      </span>
+                    </div>
+                    <div className="bg-slate-50/50 p-4 rounded-2xl border border-slate-100">
+                      <p className="text-sm font-semibold text-slate-800 mb-2">{activity.eventDetails}</p>
+                      <div className="flex items-center gap-2">
+                        <div className="w-5 h-5 bg-white border border-slate-200 rounded-md flex items-center justify-center text-[10px] font-bold text-slate-400">
+                          {activity.userEmail[0].toUpperCase()}
+                        </div>
+                        <span className="text-xs font-medium text-slate-500">
+                          Modified by <span className="text-slate-900 font-bold">{activity.userEmail.split('@')[0]}</span>
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {activities.length === 0 && (
+                  <div className="text-center py-20 text-slate-300">
+                    <History size={48} className="mx-auto mb-4 opacity-10" />
+                    <p className="text-sm font-bold uppercase tracking-widest">No history yet</p>
+                  </div>
+                )}
+              </div>
             </motion.div>
           </div>
         )}
