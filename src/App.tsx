@@ -29,7 +29,9 @@ import {
   getConflictingEventIds, 
   exportToCSV, 
   parseTimeToMinutes,
-  getTimeRange
+  getTimeRange,
+  formatMinsToTime,
+  TIME_OPTIONS
 } from './utils';
 
 export default function App() {
@@ -439,73 +441,96 @@ export default function App() {
               </div>
 
               <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
-                <div className="grid grid-cols-1 gap-4">
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Event Name</label>
-                    <input 
-                      type="text"
-                      value={editForm.name || ''}
-                      onChange={e => setEditForm({ ...editForm, name: e.target.value })}
-                      className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-mint outline-none transition-all text-sm font-medium"
-                      placeholder="e.g. Closing Plenary"
-                    />
-                  </div>
+                {(() => {
+                  const { start: startMins, end: endMins } = getTimeRange(editForm.time || '10:00 AM - 11:00 AM');
+                  const startTime = formatMinsToTime(startMins);
+                  const endTime = formatMinsToTime(endMins);
+                  
+                  return (
+                    <div className="grid grid-cols-1 gap-4">
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Event Name</label>
+                        <input 
+                          type="text"
+                          value={editForm.name || ''}
+                          onChange={e => setEditForm({ ...editForm, name: e.target.value })}
+                          className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-mint outline-none transition-all text-sm font-medium"
+                          placeholder="e.g. Closing Plenary"
+                        />
+                      </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Schedule Day</label>
-                      <input 
-                        type="text"
-                        list="day-options"
-                        value={editForm.day || ''}
-                        onChange={e => setEditForm({ ...editForm, day: e.target.value })}
-                        className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Category</label>
-                      <input 
-                        type="text"
-                        list="cat-options"
-                        value={editForm.category || ''}
-                        onChange={e => setEditForm({ ...editForm, category: e.target.value })}
-                        className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm"
-                      />
-                    </div>
-                  </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Schedule Day</label>
+                          <input 
+                            type="text"
+                            list="day-options"
+                            value={editForm.day || ''}
+                            onChange={e => setEditForm({ ...editForm, day: e.target.value })}
+                            className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-mint"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Category</label>
+                          <input 
+                            type="text"
+                            list="cat-options"
+                            value={editForm.category || ''}
+                            onChange={e => setEditForm({ ...editForm, category: e.target.value })}
+                            className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-mint"
+                          />
+                        </div>
+                      </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Time Range</label>
-                      <input 
-                        type="text"
-                        value={editForm.time || ''}
-                        onChange={e => setEditForm({ ...editForm, time: e.target.value })}
-                        className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm"
-                        placeholder="09:00 AM - 10:30 AM"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Venue</label>
-                      <input 
-                        type="text"
-                        list="venue-options"
-                        value={editForm.venue || ''}
-                        onChange={e => setEditForm({ ...editForm, venue: e.target.value })}
-                        className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm"
-                      />
-                    </div>
-                  </div>
+                      <div className="grid grid-cols-2 gap-4 bg-slate-50/50 p-4 rounded-3xl border border-white shadow-sm">
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
+                            <Clock size={10} /> Beginning
+                          </label>
+                          <select 
+                            value={startTime}
+                            onChange={e => setEditForm({ ...editForm, time: `${e.target.value} - ${endTime}` })}
+                            className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-4 focus:ring-indigo-500/5 focus:border-indigo-500 transition-all shadow-sm"
+                          >
+                            {TIME_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
+                            <Clock size={10} /> Finishing
+                          </label>
+                          <select 
+                            value={endTime}
+                            onChange={e => setEditForm({ ...editForm, time: `${startTime} - ${e.target.value}` })}
+                            className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-4 focus:ring-indigo-500/5 focus:border-indigo-500 transition-all shadow-sm"
+                          >
+                            {TIME_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                          </select>
+                        </div>
+                      </div>
 
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Description</label>
-                    <textarea 
-                      value={editForm.description || ''}
-                      onChange={e => setEditForm({ ...editForm, description: e.target.value })}
-                      className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm min-h-[100px] outline-none"
-                    />
-                  </div>
-                </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Venue</label>
+                        <input 
+                          type="text"
+                          list="venue-options"
+                          value={editForm.venue || ''}
+                          onChange={e => setEditForm({ ...editForm, venue: e.target.value })}
+                          className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-mint"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Description</label>
+                        <textarea 
+                          value={editForm.description || ''}
+                          onChange={e => setEditForm({ ...editForm, description: e.target.value })}
+                          className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm min-h-[100px] outline-none focus:ring-2 focus:ring-brand-mint"
+                        />
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
 
               <div className="p-6 border-t border-slate-100 bg-slate-50/50 flex items-center justify-end gap-3">

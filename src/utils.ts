@@ -1,6 +1,25 @@
 import { FestivalEvent } from './constants';
 
 /**
+ * Formats minutes from the start of the day into "HH:MM AM/PM".
+ */
+export function formatMinsToTime(mins: number): string {
+  let h = Math.floor(mins / 60);
+  const m = mins % 60;
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  h = h % 12;
+  if (h === 0) h = 12;
+  return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')} ${ampm}`;
+}
+
+/**
+ * Generates an array of time strings for dropdowns (every 15 mins).
+ */
+export const TIME_OPTIONS = Array.from({ length: 24 * 4 }, (_, i) => {
+  return formatMinsToTime(i * 15);
+});
+
+/**
  * Normalizes time strings like "04:00pm", "10:00 AM", "7PM ONWARDS" 
  * into minutes from the start of the day.
  */
