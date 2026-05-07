@@ -6,13 +6,21 @@ import {
   Edit2, 
   Trash2, 
   AlertCircle, 
-  Filter,
   Calendar,
   MapPin,
   Tag,
   Check,
   X,
-  Clock
+  Clock,
+  LayoutGrid,
+  Trophy,
+  Mic2,
+  Cpu,
+  Music,
+  Tent,
+  Gamepad2,
+  Dribbble,
+  Building
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { INITIAL_CSV_DATA, FestivalEvent } from './constants';
@@ -30,10 +38,14 @@ export default function App() {
   const [filterDay, setFilterDay] = useState('All');
   const [filterCategory, setFilterCategory] = useState('All');
   const [filterVenue, setFilterVenue] = useState('All');
+  const [filterTimeRange, setFilterTimeRange] = useState('All');
   const [venues, setVenues] = useState<string[]>([]);
+  const [categories, setCategories] = useState<string[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isVenueManagerOpen, setIsVenueManagerOpen] = useState(false);
+  const [isCategoryManagerOpen, setIsCategoryManagerOpen] = useState(false);
   const [newVenueName, setNewVenueName] = useState('');
+  const [newCategoryName, setNewCategoryName] = useState('');
   const [editForm, setEditForm] = useState<Partial<FestivalEvent>>({});
 
   // Initialize data
@@ -43,17 +55,24 @@ export default function App() {
     // Extract initial unique venues for the master list
     const initialVenues = [...new Set(parsed.map(e => e.venue))].sort();
     setVenues(initialVenues);
+    // Extract initial unique categories for the master list
+    const initialCategories = [...new Set(parsed.map(e => e.category))].sort();
+    setCategories(initialCategories);
   }, []);
 
   // Derived data
   const days = useMemo(() => ['All', ...new Set(events.map(e => e.day))].sort(), [events]);
-  const categories = useMemo(() => ['All', ...new Set(events.map(e => e.category))].sort(), [events]);
   
-  // Combine custom venues with any new ones that might appear in events
+  // Combine custom venues/categories with any new ones that might appear in events
   const allVenues = useMemo(() => {
     const eventVenues = events.map(e => e.venue);
     return ['All', ...new Set([...venues, ...eventVenues])].sort();
   }, [events, venues]);
+
+  const allCategories = useMemo(() => {
+    const eventCategories = events.map(e => e.category);
+    return ['All', ...new Set([...categories, ...eventCategories])].sort();
+  }, [events, categories]);
 
   const conflicts = useMemo(() => getConflictingEventIds(events), [events]);
   const conflictingIds = conflicts.locationConflicts;
@@ -66,14 +85,23 @@ export default function App() {
       const matchDay = filterDay === 'All' || e.day === filterDay;
       const matchCat = filterCategory === 'All' || e.category === filterCategory;
       const matchVenue = filterVenue === 'All' || e.venue === filterVenue;
-      return matchSearch && matchDay && matchCat && matchVenue;
+      
+      let matchTime = true;
+      if (filterTimeRange !== 'All') {
+        const startMins = parseTimeToMinutes(e.time);
+        if (filterTimeRange === 'Morning') matchTime = startMins < 720; // Before 12 PM
+        else if (filterTimeRange === 'Afternoon') matchTime = startMins >= 720 && startMins < 1020; // 12 PM - 5 PM
+        else if (filterTimeRange === 'Evening') matchTime = startMins >= 1020; // 5 PM onwards
+      }
+
+      return matchSearch && matchDay && matchCat && matchVenue && matchTime;
     }).sort((a, b) => {
       const dayA = parseInt(a.day.replace(/\D/g, '') || '0');
       const dayB = parseInt(b.day.replace(/\D/g, '') || '0');
       if (dayA !== dayB) return dayA - dayB;
       return parseTimeToMinutes(a.time) - parseTimeToMinutes(b.time);
     });
-  }, [events, search, filterDay, filterCategory, filterVenue]);
+  }, [events, search, filterDay, filterCategory, filterVenue, filterTimeRange]);
 
   // Handlers
   const handleEdit = (event: FestivalEvent) => {
@@ -105,188 +133,225 @@ export default function App() {
     setEditForm({
       day: days[1] !== 'All' ? days[1] : 'Day 1',
       time: '10:00 AM - 11:00 AM',
-      category: categories[1] !== 'All' ? categories[1] : 'Other',
-      venue: venues[1] !== 'All' ? venues[1] : 'Unknown',
+      category: allCategories[1] !== 'All' ? allCategories[1] : 'Other',
+      venue: allVenues[1] !== 'All' ? allVenues[1] : 'Unknown',
       name: '',
       description: ''
     });
   };
 
   return (
-    <div className="min-h-screen bg-brand-parchment flex flex-col">
-      {/* Top Header Navigation */}
-      <header className="h-16 flex items-center justify-between px-8 bg-white border-b border-slate-100 shadow-sm sticky top-0 z-40">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-brand-mint rounded-lg"></div>
-          <h1 className="text-xl font-semibold tracking-tight text-slate-800">Paradox Schedule Manager</h1>
-        </div>
-        <div className="flex items-center gap-4">
-          <div className="px-3 py-1 bg-amber-50 border border-amber-200 rounded-full flex items-center gap-2">
-            <span className={`w-2 h-2 rounded-full ${(conflictingIds.size > 0 || violationIds.size > 0) ? 'bg-red-400 animate-pulse' : 'bg-emerald-400'}`}></span>
-            <span className="text-xs font-medium text-amber-700 uppercase tracking-wider">
-              {(conflictingIds.size > 0 || violationIds.size > 0) ? 'Conflict Found' : 'Synced'}
-            </span>
+    <div className="min-h-screen bg-slate-50/50 flex flex-col font-sans">
+      {/* Dynamic Header */}
+      <header className="glass-header">
+        <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 bg-indigo-600 rounded-2xl rotate-3 flex items-center justify-center shadow-lg shadow-indigo-200">
+              <Calendar className="text-white -rotate-3" size={20} />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold tracking-tight text-slate-900">Paradox <span className="text-indigo-600">Events</span></h1>
+              <div className="flex items-center gap-2">
+                <div className={`w-1.5 h-1.5 rounded-full ${conflictingIds.size > 0 || violationIds.size > 0 ? 'bg-red-500 animate-pulse' : 'bg-emerald-500'}`}></div>
+                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                  {conflictingIds.size > 0 || violationIds.size > 0 ? 'Conflicts Found' : 'Schedule Optimized'}
+                </span>
+              </div>
+            </div>
           </div>
-          <button 
-            onClick={() => setIsVenueManagerOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium hover:bg-slate-50 transition-colors"
-          >
-            <MapPin size={16} /> Manage Venues
-          </button>
-          <button 
-            onClick={() => exportToCSV(events)}
-            className="flex items-center gap-2 px-4 py-2 bg-brand-sage hover:bg-[#c9d4cd] border border-slate-200 rounded-lg text-sm font-medium transition-colors"
-          >
-            <Download size={16} /> Export CSV
-          </button>
-          <button 
-            onClick={handleAddNew}
-            className="px-4 py-2 bg-slate-800 text-white rounded-lg text-sm font-medium hover:bg-slate-700 shadow-lg shadow-slate-200"
-          >
-            Add Event
-          </button>
+          
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={() => setIsCategoryManagerOpen(true)}
+              className="hidden sm:flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-2xl text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-all hover:border-slate-300"
+            >
+              <Tag size={16} /> Categories
+            </button>
+            <button 
+              onClick={() => setIsVenueManagerOpen(true)}
+              className="hidden sm:flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-2xl text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-all hover:border-slate-300"
+            >
+              <MapPin size={16} /> Venues
+            </button>
+            <button 
+              onClick={() => exportToCSV(events)}
+              className="flex items-center gap-2 px-4 py-2.5 bg-indigo-50 border border-indigo-100 rounded-2xl text-sm font-semibold text-indigo-700 hover:bg-indigo-100 transition-all"
+            >
+              <Download size={16} /> Export
+            </button>
+            <button 
+              onClick={handleAddNew}
+              className="px-6 py-2.5 bg-slate-900 text-white rounded-2xl text-sm font-bold hover:bg-slate-800 shadow-xl shadow-slate-200 transition-all active:scale-95"
+            >
+              Add Event
+            </button>
+          </div>
         </div>
       </header>
 
-      {/* Toolbar / Filters Section */}
-      <div className="p-6 flex flex-col md:flex-row items-center gap-4 bg-white border-b border-slate-50">
-        <div className="relative flex-grow w-full md:w-auto">
-          <input 
-            type="text" 
-            placeholder="Search events, venues, or descriptions..." 
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-mint"
-          />
-          <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
-        </div>
-        
-        <div className="flex items-center gap-2 w-full md:w-auto">
-          <select 
-            value={filterDay}
-            onChange={(e) => setFilterDay(e.target.value)}
-            className="bg-pastel-purple border border-purple-100 px-4 py-2 rounded-xl text-sm font-medium text-purple-700 outline-none cursor-pointer flex-1 md:flex-none"
-          >
-            {days.map(d => <option key={d} value={d}>{d === 'All' ? 'All Days' : d}</option>)}
-          </select>
-          <select 
-            value={filterCategory}
-            onChange={(e) => setFilterCategory(e.target.value)}
-            className="bg-pastel-green border border-green-100 px-4 py-2 rounded-xl text-sm font-medium text-green-700 outline-none cursor-pointer flex-1 md:flex-none"
-          >
-            {categories.map(c => <option key={c} value={c}>{c === 'All' ? 'All Categories' : c}</option>)}
-          </select>
-          <select 
-            value={filterVenue}
-            onChange={(e) => setFilterVenue(e.target.value)}
-            className="bg-pastel-blue border border-blue-100 px-4 py-2 rounded-xl text-sm font-medium text-blue-700 outline-none cursor-pointer flex-1 md:flex-none"
-          >
-            {allVenues.map(v => <option key={v} value={v}>{v === 'All' ? 'All Venues' : v}</option>)}
-          </select>
+      {/* Modern Filter Bar */}
+      <div className="max-w-7xl mx-auto w-full px-6 py-8">
+        <div className="bg-white/40 p-2 rounded-[32px] border border-white flex flex-col lg:flex-row items-center gap-3">
+          <div className="relative flex-grow w-full">
+            <input 
+              type="text" 
+              placeholder="Search anything..." 
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-12 pr-6 py-3.5 bg-white border border-slate-100 rounded-3xl text-sm font-medium focus:ring-4 focus:ring-indigo-500/5 focus:border-indigo-500 transition-all outline-none shadow-sm"
+            />
+            <Search className="w-4 h-4 absolute left-5 top-1/2 -translate-y-1/2 text-slate-400" />
+          </div>
+          
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 w-full lg:w-auto">
+            <select 
+              value={filterDay}
+              onChange={(e) => setFilterDay(e.target.value)}
+              className="custom-select bg-purple-50/50 text-purple-700 border-purple-100"
+            >
+              {days.map(d => <option key={d} value={d}>{d === 'All' ? 'All Days' : d}</option>)}
+            </select>
+            <select 
+              value={filterCategory}
+              onChange={(e) => setFilterCategory(e.target.value)}
+              className="custom-select bg-emerald-50/50 text-emerald-700 border-emerald-100"
+            >
+              {allCategories.map(c => <option key={c} value={c}>{c === 'All' ? 'Categories' : c}</option>)}
+            </select>
+            <select 
+              value={filterVenue}
+              onChange={(e) => setFilterVenue(e.target.value)}
+              className="custom-select bg-blue-50/50 text-blue-700 border-blue-100"
+            >
+              {allVenues.map(v => <option key={v} value={v}>{v === 'All' ? 'Venues' : v}</option>)}
+            </select>
+            <select 
+              value={filterTimeRange}
+              onChange={(e) => setFilterTimeRange(e.target.value)}
+              className="custom-select bg-orange-50/50 text-orange-700 border-orange-100"
+            >
+              <option value="All">All Times</option>
+              <option value="Morning">Morning</option>
+              <option value="Afternoon">Afternoon</option>
+              <option value="Evening">Evening</option>
+            </select>
+          </div>
         </div>
       </div>
 
-      {/* Schedule Editor Main Area */}
-      <main className="flex-grow px-6 py-6 overflow-hidden flex flex-col">
-        <div className="sleek-container flex-grow flex flex-col">
-          {/* Grid Header */}
-          <div className="grid-row-layout py-4 bg-slate-50 border-b border-slate-100 text-xs font-bold text-slate-400 uppercase tracking-widest hidden sm:grid">
-            <div className="text-center">Status</div>
-            <div>Time & Day</div>
-            <div>Event Title</div>
-            <div>Venue</div>
+      {/* Event Spreadsheet Content */}
+      <main className="max-w-7xl mx-auto w-full px-6 pb-20">
+        <div className="modern-spreadsheet">
+          {/* Header */}
+          <div className="spreadsheet-header hidden lg:grid">
+            <div className="text-center">State</div>
+            <div>Schedule</div>
+            <div>Event Details</div>
+            <div>Location</div>
             <div>Category</div>
-            <div className="text-right px-4">Actions</div>
+            <div className="text-right pr-4">Action</div>
           </div>
 
-          {/* Table Body */}
-          <div className="flex-grow overflow-y-auto">
+          {/* Body */}
+          <div className="flex flex-col">
             <AnimatePresence mode="popLayout">
-              {filteredEvents.map((event) => (
-                <motion.div
-                  key={event.id}
-                  layout
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className={`grid-row-layout py-4 border-b border-slate-50 hover:bg-slate-50 transition-colors group ${conflictingIds.has(event.id) || violationIds.has(event.id) ? 'conflict-row' : ''}`}
-                >
-                  <div className="flex justify-center">
-                    <div className={`w-3 h-3 rounded-full ${conflictingIds.has(event.id) || violationIds.has(event.id) ? 'bg-red-500 animate-pulse' : 'bg-emerald-400'}`}></div>
-                  </div>
-                  
-                  <div className="text-sm font-medium flex flex-col">
-                    <span className="text-slate-900">{event.time}</span>
-                    <span className="text-[10px] uppercase font-bold text-slate-400">{event.day}</span>
-                  </div>
+              {filteredEvents.map((event) => {
+                const hasConflict = conflictingIds.has(event.id);
+                const hasViolation = violationIds.has(event.id);
+                return (
+                  <motion.div
+                    key={event.id}
+                    layout
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className={`spreadsheet-row ${hasConflict || hasViolation ? 'conflict-row' : ''}`}
+                  >
+                    <div className="flex justify-center">
+                      <div className={`w-2.5 h-2.5 rounded-full ${hasConflict || hasViolation ? 'bg-red-500 animate-pulse' : 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.4)]'}`}></div>
+                    </div>
+                    
+                    <div className="flex flex-col gap-0.5">
+                      <div className="flex items-center gap-1.5 text-slate-900 font-bold text-sm">
+                        <Clock size={12} className="text-slate-300" />
+                        {event.time}
+                      </div>
+                      <span className="text-[10px] font-extrabold text-indigo-400 uppercase tracking-widest pl-4">{event.day}</span>
+                    </div>
 
-                  <div className="flex flex-col">
-                    <span className="text-sm font-bold text-slate-800 event-title">{event.name}</span>
-                    {conflictingIds.has(event.id) && (
-                      <span className="text-[10px] text-red-500 font-bold uppercase mt-1 tracking-tighter">
-                        Conflict Detected: Venue Double Booked
+                    <div className="flex flex-col gap-1">
+                      <span className="text-sm font-bold text-slate-800 tracking-tight">{event.name}</span>
+                      {(hasConflict || hasViolation) && (
+                        <span className="flex items-center gap-1 text-[9px] font-black text-red-500 uppercase tracking-tighter">
+                          <AlertCircle size={10} />
+                          {hasConflict ? 'Venue Overlap' : 'Ceremony Violation'}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-3 text-slate-600">
+                      {getVenueIcon(event.venue)}
+                      <span className="text-xs font-semibold truncate">{event.venue}</span>
+                    </div>
+
+                    <div>
+                      <span className={`px-3 py-1.5 text-[9px] font-black rounded-xl uppercase tracking-[0.1em] ${getCategoryStyle(event.category)}`}>
+                        {event.category}
                       </span>
-                    )}
-                    {violationIds.has(event.id) && (
-                      <span className="text-[10px] text-red-600 font-bold uppercase mt-1 tracking-tighter flex items-center gap-1">
-                        <AlertCircle size={10} /> Ceremony Violation: No events allowed 1h before/during Opening Ceremony
-                      </span>
-                    )}
-                  </div>
+                    </div>
 
-                  <div className="text-sm text-slate-500 flex items-center gap-1.5">
-                    <MapPin size={14} className="text-slate-300" />
-                    {event.venue}
-                  </div>
-
-                  <div>
-                    <span className={`px-3 py-1 text-[10px] font-bold rounded-full uppercase ${getCategoryStyle(event.category)}`}>
-                      {event.category}
-                    </span>
-                  </div>
-
-                  <div className="flex justify-end gap-1 px-2">
-                    <button 
-                      onClick={() => handleEdit(event)}
-                      className="p-2 hover:bg-white rounded-lg text-slate-400 hover:text-slate-600 transition-all border border-transparent hover:border-slate-100"
-                    >
-                      <Edit2 size={16} />
-                    </button>
-                    <button 
-                      onClick={() => handleDelete(event.id)}
-                      className="p-2 hover:bg-white rounded-lg text-slate-400 hover:text-red-500 transition-all border border-transparent hover:border-red-50"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                </motion.div>
-              ))}
+                    <div className="flex justify-end gap-1">
+                      <button 
+                        onClick={() => handleEdit(event)}
+                        className="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-50 text-slate-400 hover:text-indigo-600 hover:bg-white border border-transparent hover:border-slate-100 transition-all"
+                        title="Edit"
+                      >
+                        <Edit2 size={14} />
+                      </button>
+                      <button 
+                        onClick={() => {
+                          if (window.confirm(`Permanently remove "${event.name}" from schedule?`)) {
+                            handleDelete(event.id);
+                          }
+                        }}
+                        className="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-50 text-slate-400 hover:text-red-500 hover:bg-white border border-transparent hover:border-slate-100 transition-all"
+                        title="Delete"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </motion.div>
+                );
+              })}
             </AnimatePresence>
 
             {filteredEvents.length === 0 && (
-              <div className="flex flex-col items-center justify-center h-64 text-slate-400">
-                <Calendar size={48} className="mb-4 opacity-20" />
-                <p className="text-sm font-medium">No events matches your filter</p>
+              <div className="flex flex-col items-center justify-center py-32 text-slate-300">
+                <LayoutGrid size={48} className="opacity-10 mb-4" />
+                <p className="text-sm font-black uppercase tracking-widest text-slate-400">Empty Grid Search</p>
               </div>
             )}
           </div>
-
-          {/* Footer Info */}
-          <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
-            <div className="text-xs text-slate-500 font-medium">
-              Showing {filteredEvents.length} of {events.length} Events 
-              {(conflictingIds.size > 0 || violationIds.size > 0) && (
-                <span className="ml-2 text-red-500 font-bold">• {Math.ceil(conflictingIds.size / 2) + violationIds.size} Schedule issues found</span>
-              )}
-            </div>
-            <div className="flex gap-4 items-center">
-              <span className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                <span className="w-1.5 h-1.5 rounded-full bg-brand-mint"></span> System Online
-              </span>
-            </div>
-          </div>
         </div>
       </main>
+
+      {/* Floating Status Bar */}
+      <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-40">
+        <div className="px-6 py-3 bg-slate-900 text-white rounded-full shadow-2xl flex items-center gap-6 backdrop-blur-md">
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-emerald-400"></div>
+            <span className="text-[10px] font-bold tracking-widest uppercase">{filteredEvents.length} Events Listed</span>
+          </div>
+          {conflictingIds.size > 0 && (
+            <div className="flex items-center gap-2 border-l border-white/20 pl-6">
+              <div className="w-2 h-2 rounded-full bg-red-400"></div>
+              <span className="text-[10px] font-bold tracking-widest uppercase text-red-200">
+                {Math.ceil(conflictingIds.size / 2) + violationIds.size} Issues
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Footer Meta */}
       <footer className="px-8 py-3 bg-[#FAF9F6] border-t border-slate-100 flex justify-between items-center text-[10px] font-bold text-slate-400 uppercase tracking-widest shrink-0">
@@ -417,11 +482,112 @@ export default function App() {
                 {days.filter(d => d !== 'All').map(d => <option key={d} value={d} />)}
               </datalist>
               <datalist id="cat-options">
-                {categories.filter(c => c !== 'All').map(c => <option key={c} value={c} />)}
+                {allCategories.filter(c => c !== 'All').map(c => <option key={c} value={c} />)}
               </datalist>
               <datalist id="venue-options">
                 {allVenues.filter(v => v !== 'All').map(v => <option key={v} value={v} />)}
               </datalist>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Category Management Modal */}
+      <AnimatePresence>
+        {isCategoryManagerOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsCategoryManagerOpen(false)}
+              className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 20 }}
+              className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden"
+            >
+              <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                <h2 className="text-lg font-bold text-slate-800">Manage Festival Categories</h2>
+                <button 
+                  onClick={() => setIsCategoryManagerOpen(false)}
+                  className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-6">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Add New Category</label>
+                  <div className="flex gap-2">
+                    <input 
+                      type="text"
+                      value={newCategoryName}
+                      onChange={e => setNewCategoryName(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && (newCategoryName && !categories.includes(newCategoryName) && (setCategories([...categories, newCategoryName].sort()), setNewCategoryName('')))}
+                      className="flex-1 px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl outline-none text-sm focus:ring-2 focus:ring-brand-mint"
+                      placeholder="e.g. Workshop"
+                    />
+                    <button 
+                      onClick={() => {
+                        if (newCategoryName && !categories.includes(newCategoryName)) {
+                          setCategories([...categories, newCategoryName].sort());
+                          setNewCategoryName('');
+                        }
+                      }}
+                      className="px-4 py-2 bg-slate-800 text-white rounded-xl text-sm font-bold shadow-lg shadow-slate-100"
+                    >
+                      <Plus size={18} />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Existing Categories</label>
+                  <div className="max-h-[300px] overflow-y-auto space-y-1 pr-2">
+                    {categories.map((category) => {
+                      const usageCount = events.filter(e => e.category === category).length;
+                      return (
+                        <div key={category} className="flex items-center justify-between p-3 bg-slate-50/50 rounded-xl hover:bg-slate-100 transition-colors">
+                          <div className="flex flex-col">
+                            <span className="text-sm font-semibold text-slate-700">{category}</span>
+                            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">
+                              {usageCount} {usageCount === 1 ? 'Event' : 'Events'} Assigned
+                            </span>
+                          </div>
+                          <button 
+                            onClick={() => {
+                              if (usageCount > 0) {
+                                if (confirm(`This category is being used by ${usageCount} event(s). Removing it from the master list will not change those events, but it will be removed from your category suggestions. Proceed?`)) {
+                                  setCategories(categories.filter(c => c !== category));
+                                }
+                              } else {
+                                setCategories(categories.filter(c => c !== category));
+                              }
+                            }}
+                            className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                            title="Remove from master list"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-6 border-t border-slate-100 bg-slate-50/50 flex items-center justify-end">
+                <button 
+                  onClick={() => setIsCategoryManagerOpen(false)}
+                  className="px-8 py-2.5 bg-slate-800 text-white text-sm font-bold rounded-xl shadow-lg shadow-slate-200"
+                >
+                  Done
+                </button>
+              </div>
             </motion.div>
           </div>
         )}
@@ -531,11 +697,28 @@ export default function App() {
   );
 }
 
+function getVenueIcon(venue: string) {
+  const v = venue.toLowerCase();
+  if (v.includes('court') || v.includes('ground') || v.includes('stadium') || v.includes('ball')) 
+    return <div className="w-9 h-9 rounded-xl bg-orange-50 text-orange-500 flex items-center justify-center border border-orange-100"><Dribbble size={18} /></div>;
+  if (v.includes('hall') || v.includes('auditorium') || v.includes('clt') || v.includes('sac')) 
+    return <div className="w-9 h-9 rounded-xl bg-purple-50 text-purple-500 flex items-center justify-center border border-purple-100"><Mic2 size={18} /></div>;
+  if (v.includes('lab') || v.includes('class') || v.includes('nac') || v.includes('rj')) 
+    return <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-500 flex items-center justify-center border border-emerald-100"><Cpu size={18} /></div>;
+  if (v.includes('lawn') || v.includes('outdoor') || v.includes('oat')) 
+    return <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-500 flex items-center justify-center border border-amber-100"><Tent size={18} /></div>;
+  if (v.includes('arcade') || v.includes('game')) 
+    return <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-500 flex items-center justify-center border border-indigo-100"><Gamepad2 size={18} /></div>;
+  if (v.includes('unwind')) 
+    return <div className="w-9 h-9 rounded-xl bg-pink-50 text-pink-500 flex items-center justify-center border border-pink-100"><Music size={18} /></div>;
+  return <div className="w-9 h-9 rounded-xl bg-slate-50 text-slate-400 flex items-center justify-center border border-slate-100"><Building size={18} /></div>;
+}
+
 function getCategoryStyle(category: string) {
   const c = category.toLowerCase();
-  if (c.includes('sports')) return 'bg-pastel-blue text-blue-700 border border-blue-100';
-  if (c.includes('technical')) return 'bg-pastel-green text-green-700 border border-green-100';
-  if (c.includes('cultural')) return 'bg-pastel-purple text-purple-700 border border-purple-100';
-  if (c.includes('central')) return 'bg-brand-peach text-[#d67e5e] border border-orange-100';
-  return 'bg-slate-100 text-slate-500 border border-slate-200';
+  if (c.includes('sports')) return 'bg-blue-50 text-blue-600 border border-blue-100';
+  if (c.includes('technical')) return 'bg-emerald-50 text-emerald-600 border border-emerald-100';
+  if (c.includes('cultural')) return 'bg-purple-50 text-purple-600 border border-purple-100';
+  if (c.includes('central')) return 'bg-orange-50 text-orange-600 border border-orange-100';
+  return 'bg-slate-50 text-slate-500 border border-slate-100';
 }

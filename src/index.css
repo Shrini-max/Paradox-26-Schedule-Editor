@@ -1,38 +1,40 @@
 @import "tailwindcss";
 
 @theme {
-  --color-brand-mint: #B8D8D8;
-  --color-brand-sage: #D8E2DC;
-  --color-brand-parchment: #FDFCFB;
-  --color-brand-peach: #FFE5D9;
+  --color-brand-mint: #d1eaea;
+  --color-brand-sage: #e8f0eb;
+  --color-brand-parchment: #fdfdfd;
+  --color-brand-peach: #fff1eb;
   
-  --color-pastel-purple: #F3E5F5;
-  --color-pastel-green: #E8F5E9;
-  --color-pastel-blue: #E1F5FE;
-  --color-pastel-red: #FFEBEE;
+  --color-pastel-purple: #f3e8ff;
+  --color-pastel-green: #ecfdf5;
+  --color-pastel-blue: #eff6ff;
+  --color-pastel-red: #fff1f2;
   
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --shadow-soft: 0 10px 25px -5px rgba(0, 0, 0, 0.04), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
+  --shadow-hover: 0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 10px 10px -6px rgba(0, 0, 0, 0.08);
 }
 
 @layer base {
   body {
-    @apply bg-brand-parchment text-slate-700 antialiased;
-    font-family: var(--font-sans);
+    @apply bg-slate-50/50 text-slate-700 antialiased;
+    font-family: "Inter", system-ui, sans-serif;
   }
 }
 
-.sleek-container {
-  @apply bg-white rounded-2xl border border-slate-100 shadow-xl overflow-hidden;
+.modern-spreadsheet {
+  @apply bg-white rounded-3xl border border-slate-200/60 shadow-[0_20px_50px_rgba(0,0,0,0.04)] overflow-hidden;
 }
 
-.grid-row-layout {
-  @apply grid grid-cols-[60px_140px_1fr_180px_180px_120px] gap-4 px-6 items-center;
+.spreadsheet-header {
+  @apply grid grid-cols-[60px_140px_1fr_200px_180px_120px] gap-4 px-8 py-5 bg-slate-50/50 border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] items-center;
+}
+
+.spreadsheet-row {
+  @apply grid grid-cols-[60px_140px_1fr_200px_180px_120px] gap-4 px-8 py-5 border-b border-slate-50 items-center transition-all duration-200 hover:bg-slate-50/80 even:bg-slate-50/30;
 }
 
 .conflict-row {
-  @apply bg-pastel-red/50 border-red-100 text-red-900;
+  @apply bg-red-50/50 border-red-100;
 }
 
-.conflict-row .event-title {
-  @apply italic underline decoration-red-300 text-red-800;
-}
