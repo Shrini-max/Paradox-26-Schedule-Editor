@@ -1,0 +1,6 @@
+{
+  "name": "Paradox Schedule Manager",
+  "description": "An interactive, pastel-themed event scheduler with real-time editing, filtering, and conflict detection.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}

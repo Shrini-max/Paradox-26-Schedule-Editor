@@ -1,0 +1,38 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand-mint: #B8D8D8;
+  --color-brand-sage: #D8E2DC;
+  --color-brand-parchment: #FDFCFB;
+  --color-brand-peach: #FFE5D9;
+  
+  --color-pastel-purple: #F3E5F5;
+  --color-pastel-green: #E8F5E9;
+  --color-pastel-blue: #E1F5FE;
+  --color-pastel-red: #FFEBEE;
+  
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  body {
+    @apply bg-brand-parchment text-slate-700 antialiased;
+    font-family: var(--font-sans);
+  }
+}
+
+.sleek-container {
+  @apply bg-white rounded-2xl border border-slate-100 shadow-xl overflow-hidden;
+}
+
+.grid-row-layout {
+  @apply grid grid-cols-[60px_140px_1fr_180px_180px_120px] gap-4 px-6 items-center;
+}
+
+.conflict-row {
+  @apply bg-pastel-red/50 border-red-100 text-red-900;
+}
+
+.conflict-row .event-title {
+  @apply italic underline decoration-red-300 text-red-800;
+}
