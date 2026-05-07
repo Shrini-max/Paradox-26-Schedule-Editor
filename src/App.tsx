@@ -146,11 +146,14 @@ export default function App() {
       <header className="glass-header">
         <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <div className="w-10 h-10 bg-indigo-600 rounded-2xl rotate-3 flex items-center justify-center shadow-lg shadow-indigo-200">
-              <Calendar className="text-white -rotate-3" size={20} />
-            </div>
+            <img 
+              src="https://iili.io/Btn4eIe.md.png" 
+              alt="Paradox Logo" 
+              className="w-12 h-12 object-contain drop-shadow-sm" 
+              referrerPolicy="no-referrer" 
+            />
             <div>
-              <h1 className="text-xl font-bold tracking-tight text-slate-900">Paradox <span className="text-indigo-600">Events</span></h1>
+              <h1 className="text-xl font-bold tracking-tight text-slate-900">Paradox '26 <span className="text-indigo-600">Schedule</span></h1>
               <div className="flex items-center gap-2">
                 <div className={`w-1.5 h-1.5 rounded-full ${conflictingIds.size > 0 || violationIds.size > 0 ? 'bg-red-500 animate-pulse' : 'bg-emerald-500'}`}></div>
                 <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
