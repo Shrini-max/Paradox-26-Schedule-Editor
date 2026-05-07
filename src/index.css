@@ -23,15 +23,15 @@
 }
 
 .modern-spreadsheet {
-  @apply bg-white rounded-3xl border border-slate-200/60 shadow-[0_20px_50px_rgba(0,0,0,0.04)] overflow-hidden;
+  @apply bg-white/40 backdrop-blur-sm rounded-[40px] border border-white shadow-[0_32px_64px_-16px_rgba(0,0,0,0.06)] overflow-hidden;
 }
 
 .spreadsheet-header {
-  @apply grid grid-cols-[60px_140px_1fr_200px_180px_120px] gap-4 px-8 py-5 bg-slate-50/50 border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] items-center;
+  @apply grid grid-cols-[60px_140px_1fr_200px_180px_120px] gap-4 px-8 py-6 border-b border-indigo-50 text-[10px] font-extrabold text-indigo-400/80 uppercase tracking-[0.2em] items-center;
 }
 
 .spreadsheet-row {
-  @apply grid grid-cols-[60px_140px_1fr_200px_180px_120px] gap-4 px-8 py-5 border-b border-slate-50 items-center transition-all duration-200 hover:bg-slate-50/80 even:bg-slate-50/30;
+  @apply grid grid-cols-[60px_140px_1fr_200px_180px_120px] gap-4 px-8 py-5 border-b border-slate-50 items-center transition-all duration-300 hover:bg-white/90 hover:scale-[1.002] hover:shadow-xl hover:shadow-slate-200/20 relative z-10;
 }
 
 .conflict-row {

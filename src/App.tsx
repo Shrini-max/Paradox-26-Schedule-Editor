@@ -46,6 +46,7 @@ export default function App() {
   const [isCategoryManagerOpen, setIsCategoryManagerOpen] = useState(false);
   const [newVenueName, setNewVenueName] = useState('');
   const [newCategoryName, setNewCategoryName] = useState('');
+  const [deleteId, setDeleteId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Partial<FestivalEvent>>({});
 
   // Initialize data
@@ -123,9 +124,8 @@ export default function App() {
   };
 
   const handleDelete = (id: string) => {
-    if (confirm('Are you sure you want to delete this event?')) {
-      setEvents(events.filter(e => e.id !== id));
-    }
+    setEvents(events.filter(e => e.id !== id));
+    setDeleteId(null);
   };
 
   const handleAddNew = () => {
@@ -309,11 +309,7 @@ export default function App() {
                         <Edit2 size={14} />
                       </button>
                       <button 
-                        onClick={() => {
-                          if (window.confirm(`Permanently remove "${event.name}" from schedule?`)) {
-                            handleDelete(event.id);
-                          }
-                        }}
+                        onClick={() => setDeleteId(event.id)}
                         className="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-50 text-slate-400 hover:text-red-500 hover:bg-white border border-transparent hover:border-slate-100 transition-all"
                         title="Delete"
                       >
@@ -363,6 +359,49 @@ export default function App() {
           <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-brand-peach"></span> Layout Balanced</span>
         </div>
       </footer>
+
+      {/* Deletion Confirmation Modal */}
+      <AnimatePresence>
+        {deleteId && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setDeleteId(null)}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-md"
+            />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="relative w-full max-w-sm bg-white rounded-[32px] shadow-2xl p-8 text-center"
+            >
+              <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6">
+                <Trash2 size={32} className="text-red-500" />
+              </div>
+              <h3 className="text-xl font-bold text-slate-900 mb-2">Delete Event?</h3>
+              <p className="text-sm text-slate-500 mb-8 leading-relaxed">
+                This action is permanent and cannot be undone. Are you sure you want to remove this event from the schedule?
+              </p>
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => setDeleteId(null)}
+                  className="flex-1 py-3 px-6 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-2xl text-sm font-bold transition-all"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={() => handleDelete(deleteId)}
+                  className="flex-1 py-3 px-6 bg-red-500 hover:bg-red-600 text-white rounded-2xl text-sm font-bold shadow-xl shadow-red-200 transition-all active:scale-95"
+                >
+                  Delete
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Edit Modal remains similar but styled with theme */}
       <AnimatePresence>
