@@ -20,7 +20,9 @@ import {
   Tent,
   Gamepad2,
   Dribbble,
-  Building
+  Building,
+  LogOut,
+  LogIn
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { INITIAL_CSV_DATA, FestivalEvent } from './constants';
@@ -33,8 +35,59 @@ import {
   formatMinsToTime,
   TIME_OPTIONS
 } from './utils';
+import { auth, db, signInWithGoogle } from './firebase';
+import { onAuthStateChanged, signOut, User } from 'firebase/auth';
+import { 
+  collection, 
+  onSnapshot, 
+  doc, 
+  setDoc, 
+  deleteDoc, 
+  query, 
+  orderBy, 
+  writeBatch, 
+  getDocs,
+  serverTimestamp
+} from 'firebase/firestore';
+
+enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string | null;
+    email?: string | null;
+    emailVerified?: boolean | null;
+  }
+}
+
+function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth.currentUser?.uid,
+      email: auth.currentUser?.email,
+      emailVerified: auth.currentUser?.emailVerified,
+    },
+    operationType,
+    path
+  }
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
+}
 
 export default function App() {
+  const [user, setUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [events, setEvents] = useState<FestivalEvent[]>([]);
   const [search, setSearch] = useState('');
   const [filterDay, setFilterDay] = useState('All');
@@ -51,17 +104,54 @@ export default function App() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Partial<FestivalEvent>>({});
 
-  // Initialize data
+  // Auth Listener
   useEffect(() => {
-    const parsed = parseInitialCSV(INITIAL_CSV_DATA);
-    setEvents(parsed);
-    // Extract initial unique venues for the master list
-    const initialVenues = [...new Set(parsed.map(e => e.venue))].sort();
-    setVenues(initialVenues);
-    // Extract initial unique categories for the master list
-    const initialCategories = [...new Set(parsed.map(e => e.category))].sort();
-    setCategories(initialCategories);
+    return onAuthStateChanged(auth, (u) => {
+      setUser(u);
+      setAuthLoading(false);
+    });
   }, []);
+
+  // Sync with Firestore
+  useEffect(() => {
+    if (!user) return;
+
+    const eventsRef = collection(db, 'events');
+    const venuesRef = collection(db, 'venues');
+    const categoriesRef = collection(db, 'categories');
+
+    const unsubscribeEvents = onSnapshot(query(eventsRef), (snapshot) => {
+      const fetchedEvents = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as FestivalEvent));
+      setEvents(fetchedEvents);
+
+      // Seed initial data if empty
+      if (snapshot.empty) {
+        const parsed = parseInitialCSV(INITIAL_CSV_DATA);
+        const batch = writeBatch(db);
+        parsed.forEach(event => {
+          const docRef = doc(eventsRef, event.id);
+          batch.set(docRef, { ...event, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+        });
+        batch.commit().catch(err => handleFirestoreError(err, OperationType.WRITE, 'events'));
+      }
+    }, err => handleFirestoreError(err, OperationType.LIST, 'events'));
+
+    const unsubscribeVenues = onSnapshot(venuesRef, (snapshot) => {
+      const fetchedVenues = snapshot.docs.map(doc => doc.id).sort();
+      setVenues(fetchedVenues);
+    }, err => handleFirestoreError(err, OperationType.LIST, 'venues'));
+
+    const unsubscribeCategories = onSnapshot(categoriesRef, (snapshot) => {
+      const fetchedCategories = snapshot.docs.map(doc => doc.id).sort();
+      setCategories(fetchedCategories);
+    }, err => handleFirestoreError(err, OperationType.LIST, 'categories'));
+
+    return () => {
+      unsubscribeEvents();
+      unsubscribeVenues();
+      unsubscribeCategories();
+    };
+  }, [user]);
 
   // Derived data
   const days = useMemo(() => ['All', ...new Set(events.map(e => e.day))].sort(), [events]);
@@ -112,22 +202,34 @@ export default function App() {
     setEditForm(event);
   };
 
-  const handleSave = () => {
-    if (!editForm.name || !editForm.day || !editForm.time) return;
+  const handleSave = async () => {
+    if (!editForm.name || !editForm.day || !editForm.time || !user) return;
     
-    if (editingId === 'new') {
-      const newEvent = { ...editForm, id: crypto.randomUUID() } as FestivalEvent;
-      setEvents([...events, newEvent]);
-    } else {
-      setEvents(events.map(e => e.id === editingId ? { ...e, ...editForm } as FestivalEvent : e));
+    const eventId = editingId === 'new' ? crypto.randomUUID() : editingId!;
+    const eventRef = doc(db, 'events', eventId);
+    
+    try {
+      await setDoc(eventRef, {
+        ...editForm,
+        id: eventId,
+        updatedAt: serverTimestamp(),
+        ...(editingId === 'new' ? { createdAt: serverTimestamp() } : {})
+      }, { merge: true });
+      setEditingId(null);
+      setEditForm({});
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `events/${eventId}`);
     }
-    setEditingId(null);
-    setEditForm({});
   };
 
-  const handleDelete = (id: string) => {
-    setEvents(events.filter(e => e.id !== id));
-    setDeleteId(null);
+  const handleDelete = async (id: string) => {
+    if (!user) return;
+    try {
+      await deleteDoc(doc(db, 'events', id));
+      setDeleteId(null);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, `events/${id}`);
+    }
   };
 
   const handleAddNew = () => {
@@ -141,6 +243,43 @@ export default function App() {
       description: ''
     });
   };
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <motion.div 
+          animate={{ rotate: 360 }}
+          transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+          className="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full"
+        />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="max-w-md w-full bg-white rounded-[40px] shadow-2xl p-10 text-center border border-slate-100"
+        >
+          <img src="https://iili.io/Btn4eIe.md.png" alt="Paradox Logo" className="w-24 h-24 mx-auto mb-8 drop-shadow-lg" referrerPolicy="no-referrer" />
+          <h1 className="text-3xl font-extrabold text-slate-900 mb-4">Paradox '26</h1>
+          <p className="text-slate-500 mb-10 text-sm font-medium leading-relaxed">
+            Please sign in to manage the official event schedule and collaborate with the team.
+          </p>
+          <button 
+            onClick={signInWithGoogle}
+            className="w-full flex items-center justify-center gap-4 py-4 bg-slate-900 text-white rounded-2xl font-bold hover:bg-indigo-600 transition-all shadow-xl shadow-slate-200 active:scale-[0.98]"
+          >
+            <LogIn size={20} />
+            Sign in with Google
+          </button>
+        </motion.div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50/50 flex flex-col font-sans">
@@ -192,6 +331,13 @@ export default function App() {
               className="px-6 py-2.5 bg-slate-900 text-white rounded-2xl text-sm font-bold hover:bg-slate-800 shadow-xl shadow-slate-200 transition-all active:scale-95"
             >
               Add Event
+            </button>
+            <button 
+              onClick={() => signOut(auth)}
+              className="w-10 h-10 flex items-center justify-center rounded-xl bg-white border border-slate-200 text-slate-400 hover:text-red-500 transition-all"
+              title="Sign Out"
+            >
+              <LogOut size={18} />
             </button>
           </div>
         </div>
@@ -592,62 +738,81 @@ export default function App() {
               <div className="p-6 space-y-6">
                 <div>
                   <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Add New Category</label>
-                  <div className="flex gap-2">
-                    <input 
-                      type="text"
-                      value={newCategoryName}
-                      onChange={e => setNewCategoryName(e.target.value)}
-                      onKeyDown={e => e.key === 'Enter' && (newCategoryName && !categories.includes(newCategoryName) && (setCategories([...categories, newCategoryName].sort()), setNewCategoryName('')))}
-                      className="flex-1 px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl outline-none text-sm focus:ring-2 focus:ring-brand-mint"
-                      placeholder="e.g. Workshop"
-                    />
-                    <button 
-                      onClick={() => {
-                        if (newCategoryName && !categories.includes(newCategoryName)) {
-                          setCategories([...categories, newCategoryName].sort());
-                          setNewCategoryName('');
-                        }
-                      }}
-                      className="px-4 py-2 bg-slate-800 text-white rounded-xl text-sm font-bold shadow-lg shadow-slate-100"
-                    >
-                      <Plus size={18} />
-                    </button>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Existing Categories</label>
-                  <div className="max-h-[300px] overflow-y-auto space-y-1 pr-2">
-                    {categories.map((category) => {
-                      const usageCount = events.filter(e => e.category === category).length;
-                      return (
-                        <div key={category} className="flex items-center justify-between p-3 bg-slate-50/50 rounded-xl hover:bg-slate-100 transition-colors">
-                          <div className="flex flex-col">
-                            <span className="text-sm font-semibold text-slate-700">{category}</span>
-                            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">
-                              {usageCount} {usageCount === 1 ? 'Event' : 'Events'} Assigned
-                            </span>
-                          </div>
-                          <button 
-                            onClick={() => {
-                              if (usageCount > 0) {
-                                if (confirm(`This category is being used by ${usageCount} event(s). Removing it from the master list will not change those events, but it will be removed from your category suggestions. Proceed?`)) {
-                                  setCategories(categories.filter(c => c !== category));
-                                }
-                              } else {
-                                setCategories(categories.filter(c => c !== category));
+                      <div className="flex gap-2">
+                        <input 
+                          type="text"
+                          value={newCategoryName}
+                          onChange={e => setNewCategoryName(e.target.value)}
+                          onKeyDown={async e => {
+                            if (e.key === 'Enter' && newCategoryName && !categories.includes(newCategoryName)) {
+                              const name = newCategoryName;
+                              setNewCategoryName('');
+                              try {
+                                await setDoc(doc(db, 'categories', name), { name });
+                              } catch (err) {
+                                handleFirestoreError(err, OperationType.WRITE, `categories/${name}`);
                               }
-                            }}
-                            className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
-                            title="Remove from master list"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
+                            }
+                          }}
+                          className="flex-1 px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl outline-none text-sm focus:ring-2 focus:ring-brand-mint"
+                          placeholder="e.g. Workshop"
+                        />
+                        <button 
+                          onClick={async () => {
+                            if (newCategoryName && !categories.includes(newCategoryName)) {
+                              const name = newCategoryName;
+                              setNewCategoryName('');
+                              try {
+                                await setDoc(doc(db, 'categories', name), { name });
+                              } catch (err) {
+                                handleFirestoreError(err, OperationType.WRITE, `categories/${name}`);
+                              }
+                            }
+                          }}
+                          className="px-4 py-2 bg-slate-800 text-white rounded-xl text-sm font-bold shadow-lg shadow-slate-100"
+                        >
+                          <Plus size={18} />
+                        </button>
+                      </div>
+                    </div>
+    
+                    <div className="space-y-2">
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Existing Categories</label>
+                      <div className="max-h-[300px] overflow-y-auto space-y-1 pr-2">
+                        {categories.map((category) => {
+                          const usageCount = events.filter(e => e.category === category).length;
+                          return (
+                            <div key={category} className="flex items-center justify-between p-3 bg-slate-50/50 rounded-xl hover:bg-slate-100 transition-colors">
+                              <div className="flex flex-col">
+                                <span className="text-sm font-semibold text-slate-700">{category}</span>
+                                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">
+                                  {usageCount} {usageCount === 1 ? 'Event' : 'Events'} Assigned
+                                </span>
+                              </div>
+                              <button 
+                                onClick={async () => {
+                                  const confirmMsg = usageCount > 0 
+                                    ? `This category is being used by ${usageCount} event(s). Removing it from the master list will not change those events, but it will be removed from your category suggestions. Proceed?`
+                                    : null;
+                                  
+                                  if (confirmMsg && !confirm(confirmMsg)) return;
+                                  
+                                  try {
+                                    await deleteDoc(doc(db, 'categories', category));
+                                  } catch (err) {
+                                    handleFirestoreError(err, OperationType.DELETE, `categories/${category}`);
+                                  }
+                                }}
+                                className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                                title="Remove from master list"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
               </div>
 
               <div className="p-6 border-t border-slate-100 bg-slate-50/50 flex items-center justify-end">
@@ -693,62 +858,81 @@ export default function App() {
               <div className="p-6 space-y-6">
                 <div>
                   <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Add New Venue</label>
-                  <div className="flex gap-2">
-                    <input 
-                      type="text"
-                      value={newVenueName}
-                      onChange={e => setNewVenueName(e.target.value)}
-                      onKeyDown={e => e.key === 'Enter' && (newVenueName && !venues.includes(newVenueName) && (setVenues([...venues, newVenueName].sort()), setNewVenueName('')))}
-                      className="flex-1 px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl outline-none text-sm focus:ring-2 focus:ring-brand-mint"
-                      placeholder="e.g. Main Auditorium"
-                    />
-                    <button 
-                      onClick={() => {
-                        if (newVenueName && !venues.includes(newVenueName)) {
-                          setVenues([...venues, newVenueName].sort());
-                          setNewVenueName('');
-                        }
-                      }}
-                      className="px-4 py-2 bg-slate-800 text-white rounded-xl text-sm font-bold shadow-lg shadow-slate-100"
-                    >
-                      <Plus size={18} />
-                    </button>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Existing Venues</label>
-                  <div className="max-h-[300px] overflow-y-auto space-y-1 pr-2">
-                    {venues.map((venue) => {
-                      const usageCount = events.filter(e => e.venue === venue).length;
-                      return (
-                        <div key={venue} className="flex items-center justify-between p-3 bg-slate-50/50 rounded-xl hover:bg-slate-100 transition-colors">
-                          <div className="flex flex-col">
-                            <span className="text-sm font-semibold text-slate-700">{venue}</span>
-                            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">
-                              {usageCount} {usageCount === 1 ? 'Event' : 'Events'} Assigned
-                            </span>
-                          </div>
-                          <button 
-                            onClick={() => {
-                              if (usageCount > 0) {
-                                if (confirm(`This venue is being used by ${usageCount} event(s). Removing it from the master list will not change those events, but it will be removed from your venue suggestions. Proceed?`)) {
-                                  setVenues(venues.filter(v => v !== venue));
-                                }
-                              } else {
-                                setVenues(venues.filter(v => v !== venue));
+                      <div className="flex gap-2">
+                        <input 
+                          type="text"
+                          value={newVenueName}
+                          onChange={e => setNewVenueName(e.target.value)}
+                          onKeyDown={async e => {
+                            if (e.key === 'Enter' && newVenueName && !venues.includes(newVenueName)) {
+                              const name = newVenueName;
+                              setNewVenueName('');
+                              try {
+                                await setDoc(doc(db, 'venues', name), { name });
+                              } catch (err) {
+                                handleFirestoreError(err, OperationType.WRITE, `venues/${name}`);
                               }
-                            }}
-                            className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
-                            title="Remove from master list"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
+                            }
+                          }}
+                          className="flex-1 px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl outline-none text-sm focus:ring-2 focus:ring-brand-mint"
+                          placeholder="e.g. Main Auditorium"
+                        />
+                        <button 
+                          onClick={async () => {
+                            if (newVenueName && !venues.includes(newVenueName)) {
+                              const name = newVenueName;
+                              setNewVenueName('');
+                              try {
+                                await setDoc(doc(db, 'venues', name), { name });
+                              } catch (err) {
+                                handleFirestoreError(err, OperationType.WRITE, `venues/${name}`);
+                              }
+                            }
+                          }}
+                          className="px-4 py-2 bg-slate-800 text-white rounded-xl text-sm font-bold shadow-lg shadow-slate-100"
+                        >
+                          <Plus size={18} />
+                        </button>
+                      </div>
+                    </div>
+    
+                    <div className="space-y-2">
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Existing Venues</label>
+                      <div className="max-h-[300px] overflow-y-auto space-y-1 pr-2">
+                        {venues.map((venue) => {
+                          const usageCount = events.filter(e => e.venue === venue).length;
+                          return (
+                            <div key={venue} className="flex items-center justify-between p-3 bg-slate-50/50 rounded-xl hover:bg-slate-100 transition-colors">
+                              <div className="flex flex-col">
+                                <span className="text-sm font-semibold text-slate-700">{venue}</span>
+                                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">
+                                  {usageCount} {usageCount === 1 ? 'Event' : 'Events'} Assigned
+                                </span>
+                              </div>
+                              <button 
+                                onClick={async () => {
+                                  const confirmMsg = usageCount > 0 
+                                    ? `This venue is being used by ${usageCount} event(s). Removing it from the master list will not change those events, but it will be removed from your venue suggestions. Proceed?`
+                                    : null;
+                                  
+                                  if (confirmMsg && !confirm(confirmMsg)) return;
+                                  
+                                  try {
+                                    await deleteDoc(doc(db, 'venues', venue));
+                                  } catch (err) {
+                                    handleFirestoreError(err, OperationType.DELETE, `venues/${venue}`);
+                                  }
+                                }}
+                                className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                                title="Remove from master list"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
               </div>
 
               <div className="p-6 border-t border-slate-100 bg-slate-50/50 flex items-center justify-end">

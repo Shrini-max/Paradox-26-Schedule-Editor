@@ -1,0 +1,53 @@
+{
+  "entities": {
+    "Event": {
+      "title": "Event",
+      "description": "A scheduled festival event",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "day": { "type": "string" },
+        "time": { "type": "string" },
+        "category": { "type": "string" },
+        "name": { "type": "string" },
+        "venue": { "type": "string" },
+        "description": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["day", "time", "category", "name", "venue"]
+    },
+    "Venue": {
+      "title": "Venue",
+      "description": "A location where events take place",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" }
+      },
+      "required": ["name"]
+    },
+    "Category": {
+      "title": "Category",
+      "description": "An event category",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" }
+      },
+      "required": ["name"]
+    }
+  },
+  "firestore": {
+    "events": {
+      "schema": "Event",
+      "description": "Collection of all festival events"
+    },
+    "venues": {
+      "schema": "Venue",
+      "description": "Collection of available venues"
+    },
+    "categories": {
+      "schema": "Category",
+      "description": "Collection of event categories"
+    }
+  }
+}

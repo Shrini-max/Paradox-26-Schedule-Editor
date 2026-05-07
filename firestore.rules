@@ -1,0 +1,88 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Phase 3: Primitives
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Phase 4: Entity Validation
+    function isValidEvent(data) {
+      return data.keys().hasAll(['day', 'time', 'category', 'name', 'venue', 'id']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 200 &&
+             data.day is string && data.day.size() > 0 && data.day.size() <= 20 &&
+             data.time is string && data.time.size() > 0 && data.time.size() <= 50 &&
+             data.category is string && data.category.size() > 0 && data.category.size() <= 50 &&
+             data.venue is string && data.venue.size() > 0 && data.venue.size() <= 100 &&
+             data.id is string && data.id.size() > 0 && data.id.size() <= 128 &&
+             (data.get('description', '') is string && data.get('description', '').size() <= 2000);
+    }
+
+    function isValidVenue(data) {
+      return data.keys().hasAll(['name']) && data.keys().size() == 1 &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 100;
+    }
+
+    function isValidCategory(data) {
+      return data.keys().hasAll(['name']) && data.keys().size() == 1 &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 100;
+    }
+
+    // Rules
+    match /events/{eventId} {
+      allow read: if isSignedIn();
+      allow create: if isVerified() && isValidId(eventId) && isValidEvent(incoming()) && 
+                    incoming().id == eventId &&
+                    incoming().createdAt == request.time &&
+                    incoming().updatedAt == request.time;
+      
+      allow update: if isVerified() && isValidId(eventId) && 
+                    isValidEvent(incoming()) &&
+                    incoming().id == existing().id &&
+                    incoming().createdAt == existing().createdAt &&
+                    incoming().updatedAt == request.time &&
+                    (
+                      // Action: Standard Edit
+                      incoming().diff(existing()).affectedKeys().hasOnly(['name', 'day', 'time', 'category', 'venue', 'description', 'updatedAt'])
+                    );
+      
+      allow delete: if isVerified() && isValidId(eventId);
+    }
+
+    match /venues/{venueId} {
+      allow read: if isSignedIn();
+      allow write: if isVerified() && isValidId(venueId) && isValidVenue(incoming());
+    }
+
+    match /categories/{categoryId} {
+      allow read: if isSignedIn();
+      allow write: if isVerified() && isValidId(categoryId) && isValidCategory(incoming());
+    }
+    
+    // Testing path
+    match /test/connection {
+      allow read: if true;
+    }
+  }
+}
