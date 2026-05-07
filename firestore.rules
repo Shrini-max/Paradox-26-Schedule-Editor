@@ -29,13 +29,15 @@ service cloud.firestore {
 
     // Phase 4: Entity Validation
     function isValidEvent(data) {
-      return data.keys().hasAll(['day', 'time', 'category', 'name', 'venue', 'id']) &&
+      return data.keys().hasAll(['day', 'time', 'category', 'name', 'venue', 'id', 'updatedBy', 'updatedByEmail']) &&
              data.name is string && data.name.size() > 0 && data.name.size() <= 200 &&
              data.day is string && data.day.size() > 0 && data.day.size() <= 20 &&
              data.time is string && data.time.size() > 0 && data.time.size() <= 50 &&
              data.category is string && data.category.size() > 0 && data.category.size() <= 50 &&
              data.venue is string && data.venue.size() > 0 && data.venue.size() <= 100 &&
              data.id is string && data.id.size() > 0 && data.id.size() <= 128 &&
+             data.updatedBy == request.auth.uid &&
+             data.updatedByEmail == request.auth.token.email &&
              (data.get('description', '') is string && data.get('description', '').size() <= 2000);
     }
 
@@ -64,7 +66,7 @@ service cloud.firestore {
                     incoming().updatedAt == request.time &&
                     (
                       // Action: Standard Edit
-                      incoming().diff(existing()).affectedKeys().hasOnly(['name', 'day', 'time', 'category', 'venue', 'description', 'updatedAt'])
+                      incoming().diff(existing()).affectedKeys().hasOnly(['name', 'day', 'time', 'category', 'venue', 'description', 'updatedAt', 'updatedBy', 'updatedByEmail'])
                     );
       
       allow delete: if isVerified() && isValidId(eventId);

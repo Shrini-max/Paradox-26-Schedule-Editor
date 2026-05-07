@@ -12,10 +12,12 @@
         "name": { "type": "string" },
         "venue": { "type": "string" },
         "description": { "type": "string" },
+        "updatedBy": { "type": "string" },
+        "updatedByEmail": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["day", "time", "category", "name", "venue"]
+      "required": ["day", "time", "category", "name", "venue", "updatedBy", "updatedByEmail"]
     },
     "Venue": {
       "title": "Venue",

@@ -6,6 +6,10 @@ export interface FestivalEvent {
   name: string;
   venue: string;
   description: string;
+  updatedBy: string;
+  updatedByEmail: string;
+  createdAt?: any;
+  updatedAt?: any;
 }
 
 export const INITIAL_CSV_DATA = `Day,Time,Category,Event,Venue,Description

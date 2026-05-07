@@ -177,7 +177,9 @@ export function parseInitialCSV(csv: string): FestivalEvent[] {
         category: parts[2]?.trim() || '',
         name: parts[3]?.trim() || '',
         venue: parts[4]?.trim() || '',
-        description: parts[5]?.trim() || ''
+        description: parts[5]?.trim() || '',
+        updatedBy: 'initial-seed',
+        updatedByEmail: 'initial@seed.com'
       });
     }
   }

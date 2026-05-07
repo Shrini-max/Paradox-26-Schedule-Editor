@@ -130,7 +130,13 @@ export default function App() {
         const batch = writeBatch(db);
         parsed.forEach(event => {
           const docRef = doc(eventsRef, event.id);
-          batch.set(docRef, { ...event, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+          batch.set(docRef, { 
+            ...event, 
+            updatedBy: user.uid,
+            updatedByEmail: user.email || 'system',
+            createdAt: serverTimestamp(), 
+            updatedAt: serverTimestamp() 
+          });
         });
         batch.commit().catch(err => handleFirestoreError(err, OperationType.WRITE, 'events'));
       }
@@ -212,6 +218,8 @@ export default function App() {
       await setDoc(eventRef, {
         ...editForm,
         id: eventId,
+        updatedBy: user.uid,
+        updatedByEmail: user.email,
         updatedAt: serverTimestamp(),
         ...(editingId === 'new' ? { createdAt: serverTimestamp() } : {})
       }, { merge: true });
@@ -434,7 +442,15 @@ export default function App() {
                     </div>
 
                     <div className="flex flex-col gap-1">
-                      <span className="text-sm font-bold text-slate-800 tracking-tight">{event.name}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-bold text-slate-800 tracking-tight">{event.name}</span>
+                        {event.updatedByEmail && (
+                          <div className="flex items-center gap-1 px-1.5 py-0.5 bg-slate-100 rounded-md border border-slate-200 shadow-sm" title={`Last updated by ${event.updatedByEmail}`}>
+                            <span className="text-[8px] font-extrabold text-slate-400 uppercase tracking-tighter">BY</span>
+                            <span className="text-[9px] font-bold text-slate-600 truncate max-w-[60px]">{(event.updatedByEmail || 'user').split('@')[0]}</span>
+                          </div>
+                        )}
+                      </div>
                       {(hasConflict || hasViolation) && (
                         <span className="flex items-center gap-1 text-[9px] font-black text-red-500 uppercase tracking-tighter">
                           <AlertCircle size={10} />
